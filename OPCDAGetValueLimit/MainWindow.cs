@@ -47,6 +47,11 @@ namespace DATest
 
             openFileDialog.Filter = "Text Files|*.txt|All Files|*.*";
             openFileDialog.Title = "Select a File";
+
+            if (!Directory.Exists("./Config"))
+            {
+                Directory.CreateDirectory("./Config");
+            }
         }
 
         private void OpenFile_Click(object sender, EventArgs e)

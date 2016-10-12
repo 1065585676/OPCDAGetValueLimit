@@ -18,9 +18,11 @@ namespace DATest
 
         private void OK_Click(object sender, EventArgs e)
         {
-            licenseString = LicenseString.Text;
-            opcUrlString = OPCUrlString.Text;
+            licenseString = LicenseString.Text.Trim();
+            opcUrlString = OPCUrlString.Text.Trim();
             File.WriteAllText("./Config/LicenseAndURL.config", licenseString + "@" + opcUrlString);
+            MessageBox.Show("已写入：" + licenseString + "@" + opcUrlString, "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            this.Close();
         }
     }
 }
