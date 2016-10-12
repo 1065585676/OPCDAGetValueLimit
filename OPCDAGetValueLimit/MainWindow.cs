@@ -2,9 +2,7 @@
 using Softing.OPCToolbox.Client;
 using System;
 using System.Collections.Generic;
-using System.Data;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
@@ -139,7 +137,7 @@ namespace DATest
         {
             isStopReadValueThread = false;
 
-            List<string> items = TagsList.CheckedItems.Cast<string>().ToList();
+            List<string> items = CheckedItemCollection2ListString(TagsList.CheckedItems);
             //GettedValueListView.Items.Clear();
 
             ReadValueThread = new Thread(ReadValueThreadFunction);
@@ -389,10 +387,25 @@ namespace DATest
             StatusMsg.Text = "正在拼接，请稍等...";
         }
 
+        public static List<string> CheckedItemCollection2ListString(CheckedListBox.CheckedItemCollection colletction)
+        {
+            List<string> result = new List<string>();
+            foreach (string s in colletction)
+            {
+                result.Add(s);
+            }
+            return result;
+        }
+
         private void ReadFileContent_TagThreadFunction()
         {
-            List<string> items = FileContentList.CheckedItems.Cast<string>().ToList();
-            List<string> items_Attr = FileContentList_Attr.CheckedItems.Cast<string>().ToList();
+            ////net3.5
+            //List<string> items = FileContentList.CheckedItems.Cast<string>().ToList();
+            //List<string> items_Attr = FileContentList_Attr.CheckedItems.Cast<string>().ToList();
+
+            // net2.0
+            List<string> items = CheckedItemCollection2ListString(FileContentList.CheckedItems);
+            List<string> items_Attr = CheckedItemCollection2ListString(FileContentList_Attr.CheckedItems);
 
             //File.Delete("./TestDA_Item.txt");
             int result = (int)EnumResultCode.S_OK;
@@ -676,7 +689,7 @@ namespace DATest
         {
             isStopWatchValueChangeEvent = false;
 
-            List<string> items = TagsList.CheckedItems.Cast<string>().ToList();
+            List<string> items = CheckedItemCollection2ListString(TagsList.CheckedItems);
             File.Delete("./change.txt");
 
             WatchValueChangeThread = new Thread(WatchValueChangeEvent);
