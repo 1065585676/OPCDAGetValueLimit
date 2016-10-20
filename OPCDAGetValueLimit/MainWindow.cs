@@ -137,17 +137,16 @@ namespace DATest
         {
             isStopReadValueThread = false;
 
-            List<string> items = CheckedItemCollection2ListString(TagsList.CheckedItems);
-            //GettedValueListView.Items.Clear();
-
             ReadValueThread = new Thread(ReadValueThreadFunction);
             ReadValueThread.IsBackground = true;
-            ReadValueThread.Start(items);
+            ReadValueThread.Start();
+
+            StatusMsg.Text = "开始连接OPC...";
         }
 
-        private void ReadValueThreadFunction(object p_items)
+        private void ReadValueThreadFunction()
         {
-            List<string> items = (List<string>)p_items;
+            List<string> items = CheckedItemCollection2ListString(TagsList.CheckedItems);
 
             //不需要处理多余注释就可以读取值？？？
             //List<string> items_copy = new List<string>();
@@ -169,42 +168,54 @@ namespace DATest
             //}
             //List<string> items = items_copy;
 
-            OpcClient readValueOPCClient = new OpcClient();
-            StatusMsg.Text = "开始连接OPC...";
+            OpcClient readValueOPCClient = null;
+            int result = (int)EnumResultCode.S_OK;
             try
             {
-                int result = (int)EnumResultCode.S_OK;
+                readValueOPCClient = new OpcClient();
+
                 //	initialize the client instance
-                if (!ResultCode.SUCCEEDED(readValueOPCClient.Initialize()))
-                {
-                    readValueOPCClient = null;
-                    return;
-                }   //	end if
+                if (!ResultCode.SUCCEEDED(readValueOPCClient.Initialize())) throw new Exception("readValueOPCClient.Initialize():Initialize the client instance error!");
 
                 //	initialize the DA client simulation
                 result |= readValueOPCClient.InitializeDaObjects(items);
+                if (!ResultCode.SUCCEEDED(result)) throw new Exception("readValueOPCClient.InitializeDaObjects():Initialize the DA client simulation error!");
             }
             catch (Exception exc)
             {
-                StatusMsg.Text = exc.ToString();
+                MessageBox.Show("ReadValueThreadFunction:" + exc.ToString());
+            }
+            finally
+            {
+                if (readValueOPCClient != null)
+                {
+                    readValueOPCClient.Terminate();
+                    readValueOPCClient = null;
+                }
+            }
+
+            if (!ResultCode.SUCCEEDED(result))
+            {
+                StatusMsg.Text = "操作异常.";
                 return;
-            }	//	end try...catch
+            }
 
             //m_opcClient.ActivateSession(false);   //异步激活
             readValueOPCClient.ActivateSession(true);   //同步激活
-
             StatusMsg.Text = "已激活Session，正在读取Value，请稍等...";
-            Dictionary<string, string> valueList = readValueOPCClient.ReadItems();
-            StatusMsg.Text = "Value读取完成.";
 
-            StatusMsg.Text = "正在显示（/保存）Value，请稍等...";
+            Dictionary<string, string> valueList = readValueOPCClient.ReadItems();
+            StatusMsg.Text = "Value读取完成, 正在显示（保存）Value，请稍等...";
+            //--------------------------------------------------------------------------------
+
             if (SaveToFile.Checked)
             {
-                File.Delete("./vlaueInfo.txt");
+                File.Delete(@"./vlaueInfo.txt");
                 foreach (KeyValuePair<string, string> kvp in valueList)
                 {
-                    File.AppendAllText("./vlaueInfo.txt", "Key = " + kvp.Key + ", Value = " + kvp.Value + "\r\n");
+                    File.AppendAllText(@"./vlaueInfo.txt", "Key = " + kvp.Key + ", Value = " + kvp.Value + "\r\n");
 
+                    // 判断是否是第一次读取值，如果不是则判断value是否change.
                     if (GettedValueListView.Items.Count > 0)
                     {
                         ListViewItem findResult = GettedValueListView.FindItemWithText(kvp.Key, true, 0, false);
@@ -248,14 +259,11 @@ namespace DATest
                     if (isStopReadValueThread) break;
                 }
             }
-            if (isStopReadValueThread) StatusMsg.Text = "已停止显示（/保存）Value.";
+            if (isStopReadValueThread) StatusMsg.Text = "已停止显示（保存）Value.";
             else StatusMsg.Text = "显示（/保存）Value完成.";
 
             GettedValueListView.Columns[0].Width = -1;
             GettedValueListView.Columns[1].Width = -2;
-
-            readValueOPCClient.Terminate();
-            readValueOPCClient = null;
         }
 
         private void SelectAll_MouseClick(object sender, MouseEventArgs e)
@@ -380,6 +388,8 @@ namespace DATest
             isStopReadFileContent_TagThread = false;
             if (ClearBeforeRead_Tag.Checked) TagsList.Items.Clear();
 
+            File.Delete(@"./TestDA_Item.txt");
+
             ReadFileContent_TagThread = new Thread(ReadFileContent_TagThreadFunction);
             ReadFileContent_TagThread.IsBackground = true;
             ReadFileContent_TagThread.Start();
@@ -407,80 +417,104 @@ namespace DATest
             List<string> items = CheckedItemCollection2ListString(FileContentList.CheckedItems);
             List<string> items_Attr = CheckedItemCollection2ListString(FileContentList_Attr.CheckedItems);
 
-            //File.Delete("./TestDA_Item.txt");
+            if (items.Count == 0 || items_Attr.Count == 0)
+            {
+                MessageBox.Show("PointSet or pointSet property is empty!");
+                StatusMsg.Text = "操作异常.";
+                return;
+            }
+
             int result = (int)EnumResultCode.S_OK;
+            OpcClient opcClient = null;
             try
             {
-                OpcClient opcClient = new OpcClient();
+                opcClient = new OpcClient();
 
                 //	initialize the client instance
-                if (!ResultCode.SUCCEEDED(opcClient.Initialize()))
-                {
-                    opcClient = null;
-                    return;
-                }   //	end if
+                if (!ResultCode.SUCCEEDED(opcClient.Initialize())) throw new Exception("opcClient.Initialize():Initialize the client instance error!");
 
                 //	initialize the DA client simulation
                 result |= opcClient.InitializeDaObjects();
+                if (!ResultCode.SUCCEEDED(result)) throw new Exception("opcClient.InitializeDaObjects():Initialize the DA client simulation error!");
 
-                try
-                {
-                    MyDaSession testSession = opcClient.GetSession();
-                    DaAddressSpaceElement testAddressSpaceElement = new DaAddressSpaceElement(EnumAddressSpaceElementType.BRANCH, String.Empty, string.Empty, string.Empty, 0, null);
-                    testAddressSpaceElement.Session = testSession;
-                    MyTest(testAddressSpaceElement, items, items_Attr);
-                }
-                catch (Exception exc)
-                {
-                    //Console.WriteLine(exc.ToString());
-                    MessageBox.Show(exc.ToString());
-                }   //	end try...catch
-                StatusMsg.Text = "拼接操作完成.";
-                SelectAll_Tag.CheckState = CheckState.Checked;
-                //MessageBox.Show("Get Tags Complished.");
-                //Console.WriteLine("Get Complished.");
-
-                opcClient.Terminate();
-                opcClient = null;
+                DaAddressSpaceElement testAddressSpaceElement = new DaAddressSpaceElement(EnumAddressSpaceElementType.BRANCH, String.Empty, string.Empty, string.Empty, 0, null);
+                testAddressSpaceElement.Session = opcClient.GetSession(); ;
+                MyTest(testAddressSpaceElement, items, items_Attr);
             }
             catch (Exception exc)
             {
-                //Console.WriteLine(exc.ToString());
-                MessageBox.Show(exc.ToString());
-            }   //	end try...catch
+                MessageBox.Show("ReadFileContent_TagThreadFunction:" + exc.ToString());
+            }
+            finally
+            {
+                items.Clear();
+                items = null;
+
+                items_Attr.Clear();
+                items_Attr = null;
+
+                if (opcClient != null)
+                {
+                    opcClient.Terminate();
+                    opcClient = null;
+                }
+            }
+
+            if (!ResultCode.SUCCEEDED(result))
+            {
+                StatusMsg.Text = "操作异常.";
+            }
+            else
+            {
+                StatusMsg.Text = "拼接操作结束.";
+                SelectAll_Tag.CheckState = CheckState.Checked;
+            }
         }
 
         private void MyTest(DaAddressSpaceElement element, List<string> items, List<string> items_Attr)
         {
-            if (isStopReadFileContent_TagThread) return;
+            if (isStopReadFileContent_TagThread) throw new Exception("手动停止Tag拼接.");
 
-            DaAddressSpaceElementBrowseOptions browseOptions = new DaAddressSpaceElementBrowseOptions();
+            DaAddressSpaceElementBrowseOptions browseOptions = null;
             browseOptions.ElementTypeFilter = EnumAddressSpaceElementType.ALL;
-            ExecutionOptions m_executionOptions = new ExecutionOptions();
+            ExecutionOptions m_executionOptions = null;
             DaAddressSpaceElement[] testAddressSpaceElements = null;
 
-            if (ResultCode.SUCCEEDED(element.Browse(
-                    browseOptions,
-                    out testAddressSpaceElements,
-                    m_executionOptions
-                    )))
+            try
             {
-                if (testAddressSpaceElements != null && testAddressSpaceElements.Length > 0)
+                browseOptions = new DaAddressSpaceElementBrowseOptions();
+                m_executionOptions = new ExecutionOptions();
+
+                if (ResultCode.SUCCEEDED(element.Browse(
+                        browseOptions,
+                        out testAddressSpaceElements,
+                        m_executionOptions
+                        )))
                 {
-                    for (int i = 0; i < testAddressSpaceElements.Length; i++)
+                    if (testAddressSpaceElements != null && testAddressSpaceElements.Length > 0)
                     {
-                        if (!items.Contains(testAddressSpaceElements[i].QualifiedName.Split('.')[0])) continue;
-                        MyTest(testAddressSpaceElements[i], items, items_Attr);
-                    }//end for
-                }
-                else
-                {
-                    if (items_Attr.Contains(element.Name))
+                        for (int i = 0; i < testAddressSpaceElements.Length; i++)
+                        {
+                            if (!items.Contains(testAddressSpaceElements[i].QualifiedName.Split('.')[0])) continue;
+                            MyTest(testAddressSpaceElements[i], items, items_Attr);
+                        }//end for
+                    }
+                    else
                     {
-                        //File.AppendAllText("./TestDA_Item.txt", element.QualifiedName + "\r\n");
-                        TagsList.Items.Add(element.QualifiedName, true);
+                        if (items_Attr.Contains(element.Name))
+                        {
+                            File.AppendAllText(@"./TestDA_Item.txt", element.QualifiedName + "\r\n");
+                            TagsList.Items.Add(element.QualifiedName, true);
+                        }
                     }
                 }
+            }
+            catch
+            {
+                browseOptions = null;
+                testAddressSpaceElements = null;
+                m_executionOptions = null;
+                throw new Exception("手动停止Tag拼接.");
             }
 
             //GetDaProperties
@@ -497,18 +531,21 @@ namespace DATest
                 {
                     for (int i = 0; i < daProperties.Length; i++)
                     {
+                        if (isStopReadFileContent_TagThread)
+                        {
+                            m_propertyGetOptions = null;
+                            daProperties = null;
+                            m_propertyGetOptions = null;
+                            throw new Exception("手动停止Tag拼接.");
+                        }
                         //add all properties except OPC-specific properties
                         if (daProperties[i].Id >= 100 && items_Attr.Contains(daProperties[i].Description))
                         {
-                            //File.AppendAllText("./TestDA_Item.txt", element.QualifiedName + "." + daProperties[i].Description + "\r\n");
+                            File.AppendAllText(@"./TestDA_Item.txt", element.QualifiedName + "." + daProperties[i].Description + "\r\n");
                             TagsList.Items.Add(daProperties[i].ItemId + "(" + element.QualifiedName + "." + daProperties[i].Description + ")", true);
                             //TagsList.Items.Add(element.QualifiedName + "." + daProperties[i].Description, true);
                         }
                     }//end for
-                }
-                else
-                {
-                    //MessageBox.Show(element.QualifiedName);
                 }
             }   //  end if
         }
@@ -690,7 +727,7 @@ namespace DATest
             isStopWatchValueChangeEvent = false;
 
             List<string> items = CheckedItemCollection2ListString(TagsList.CheckedItems);
-            File.Delete("./change.txt");
+            File.Delete(@"./change.txt");
 
             WatchValueChangeThread = new Thread(WatchValueChangeEvent);
             WatchValueChangeThread.IsBackground = true;
